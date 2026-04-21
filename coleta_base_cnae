@@ -1,0 +1,73 @@
+# ==============================================================================
+# BASE DE REFERÊNCIA — CNAE 2.3 (versão atual)
+# Fonte: CONCLA/IBGE — XLSX direto
+# URL: https://concla.ibge.gov.br/images/concla/documentacao/CNAE_Subclasses_2_3_Estrutura_Detalhada.xlsx
+# ==============================================================================
+
+library(httr2)
+library(readxl)
+library(dplyr)
+library(stringi)
+library(stringr)
+library(readr)
+
+limpar_texto <- function(x) {
+  x |>
+    stri_trans_general("Latin-ASCII") |>
+    str_to_upper() |>
+    str_squish()
+}
+
+# --- Download -----------------------------------------------------------------
+
+url_cnae <- "https://concla.ibge.gov.br/images/concla/documentacao/CNAE_Subclasses_2_3_Estrutura_Detalhada.xlsx"
+
+dir.create("ref/data_raw", recursive = TRUE, showWarnings = FALSE)
+xlsx_path <- "ref/data_raw/cnae_2_3.xlsx"
+
+if (!file.exists(xlsx_path)) {
+  message("Baixando CNAE 2.3...")
+  download.file(url_cnae, xlsx_path, mode = "wb")
+}
+
+# --- Inspecionar abas antes de ler -------------------------------------------
+# Rode esta linha primeiro para confirmar o nome da aba correta:
+# readxl::excel_sheets(xlsx_path)
+
+raw <- read_excel(xlsx_path, sheet = 1, col_types = "text")
+
+# Inspecione os nomes reais das colunas antes de prosseguir:
+message("Colunas encontradas:")
+print(names(raw))
+
+# --- Limpeza ------------------------------------------------------------------
+# Ajuste os nomes abaixo conforme o print acima.
+# Layout esperado no CNAE 2.3: Seção | Divisão | Grupo | Classe | Subclasse | Denominação
+
+cnae <- raw |>
+  rename(
+    cod_secao     = 1,
+    cod_divisao   = 2,
+    cod_grupo     = 3,
+    cod_classe    = 4,
+    cod_subclasse = 5,
+    nome_original = 6
+  ) |>
+  # 1. Converte string vazia em NA
+  mutate(across(c(cod_secao, cod_divisao, cod_grupo, cod_classe), ~ na_if(.x, ""))) |>
+  # 2. Fill ANTES do filter — propaga enquanto as linhas hierárquicas ainda existem
+  tidyr::fill(cod_secao, cod_divisao, cod_grupo, cod_classe, .direction = "down") |>
+  # 3. Agora sim filtra só as subclasses
+  filter(!is.na(cod_subclasse), str_detect(cod_subclasse, "\\d")) |>
+  mutate(nome_subclasse = limpar_texto(nome_original)) |>
+  select(
+    cod_secao, cod_divisao, cod_grupo, cod_classe,
+    cod_subclasse, nome_subclasse, nome_original
+  )
+
+# --- Export -------------------------------------------------------------------
+
+dir.create("ref/output", recursive = TRUE, showWarnings = FALSE)
+write_csv(cnae, "ref/output/cnae.csv")
+
+message(glue::glue("✅ CNAE 2.3: {nrow(cnae)} subclasses salvas."))
