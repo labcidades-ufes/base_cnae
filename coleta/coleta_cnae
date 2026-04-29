@@ -103,10 +103,6 @@ collect_data <- function() {
       if (n < 6) for (j in seq(n + 1, 6)) df[[paste0("c", j)]] <- NA_character_
       names(df) <- paste0("c", 1:6)
 
-      df <- df |>
-        mutate(across(where(is.character),
-                      ~ iconv(.x, from = "latin1", to = "UTF-8", sub = "")))
-
       df$versao_label   <- label
       df$classificacao  <- nome
       df$data_coleta    <- format(Sys.time(), "%Y%m%d")
