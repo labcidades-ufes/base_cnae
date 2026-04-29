@@ -14,6 +14,7 @@ library(readr)
 library(glue)
 library(stringr)
 source("utils.R")
+Sys.setlocale("LC_ALL", "C.UTF-8")
 
 PAGE_URL <- "https://cnae.ibge.gov.br/classificacoes/download-concla/8265-download"
 BASE_URL <- "https://cnae.ibge.gov.br"
@@ -101,6 +102,10 @@ collect_data <- function() {
       df <- raw[, seq_len(min(n, 6)), drop = FALSE]
       if (n < 6) for (j in seq(n + 1, 6)) df[[paste0("c", j)]] <- NA_character_
       names(df) <- paste0("c", 1:6)
+
+      df <- df |>
+        mutate(across(where(is.character),
+                      ~ iconv(.x, from = "latin1", to = "UTF-8", sub = "")))
 
       df$versao_label   <- label
       df$classificacao  <- nome
