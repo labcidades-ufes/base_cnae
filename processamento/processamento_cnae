@@ -13,6 +13,7 @@ library(stringi)
 library(stringr)
 library(glue)
 source("utils.R")
+Sys.setlocale("LC_ALL", "C.UTF-8")
 
 # ------------------------------------------------------------------------------
 # Utilitários
