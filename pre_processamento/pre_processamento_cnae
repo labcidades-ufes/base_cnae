@@ -9,6 +9,7 @@ library(dplyr)
 library(stringr)
 library(glue)
 source("utils.R")
+Sys.setlocale("LC_ALL", "C.UTF-8")
 
 # ------------------------------------------------------------------------------
 # 1. LEITURA DO BRONZE
