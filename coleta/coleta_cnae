@@ -1,0 +1,139 @@
+#!/usr/bin/env Rscript
+# ==============================================================================
+# COLETA — BASE CNAE
+# Raspa a página de downloads do CONCLA, baixa todos os arquivos XLS/XLSX de
+# estrutura detalhada das classificações CNAE e salva como Parquet no MinIO.
+# Saída: bronze/base_cnae/raw_cnae_YYYYMMDD.parquet
+# Schema: versao_label | classificacao | c1 | c2 | c3 | c4 | c5 | c6
+# ==============================================================================
+library(rvest)
+library(httr2)
+library(readxl)
+library(dplyr)
+library(readr)
+library(glue)
+library(stringr)
+source("utils.R")
+
+PAGE_URL <- "https://cnae.ibge.gov.br/classificacoes/download-concla/8265-download"
+BASE_URL <- "https://cnae.ibge.gov.br"
+
+# ------------------------------------------------------------------------------
+# 1. RASPAGEM
+# ------------------------------------------------------------------------------
+cat("[COLETA] Acessando página do CONCLA...\n")
+
+pagina <- tryCatch(
+  read_html(PAGE_URL),
+  error = function(e) {
+    cat("[COLETA] Erro ao acessar página:", conditionMessage(e), "\n")
+    quit(status = 1)
+  }
+)
+
+linhas <- pagina |> html_nodes("table tr")
+
+extrair_linha <- function(linha) {
+  cels <- html_nodes(linha, "td")
+  if (length(cels) < 2) return(NULL)
+  classificacao <- html_text(cels[[1]], trim = TRUE)
+  link_node <- html_node(cels[[2]], "a")
+  if (is.na(link_node) || is.null(link_node)) return(NULL)
+  href <- html_attr(link_node, "href")
+  if (is.na(href) || !grepl("\\.(xls|xlsx)$", href, ignore.case = TRUE)) return(NULL)
+  ext <- tolower(regmatches(href, regexpr("(?i)(xlsx|xls)$", href, perl = TRUE)))
+  data.frame(
+    classificacao = classificacao,
+    url = paste0(BASE_URL, utils::URLencode(href)),
+    ext = ext, stringsAsFactors = FALSE
+  )
+}
+
+versoes_raw <- do.call(rbind, Filter(Negate(is.null), lapply(linhas, extrair_linha)))
+
+if (is.null(versoes_raw) || nrow(versoes_raw) == 0) {
+  cat("[COLETA] Nenhum link encontrado.\n")
+  quit(status = 1)
+}
+
+versoes <- versoes_raw[grepl("^CNAE", versoes_raw$classificacao, ignore.case = TRUE), ]
+versoes$versao_label <- tolower(gsub("[^A-Za-z0-9_\\-]", "_", gsub("\\s+", "_", versoes$classificacao)))
+
+cat(glue("[COLETA] {nrow(versoes)} versões CNAE encontradas.\n"))
+
+# ------------------------------------------------------------------------------
+# 2. DOWNLOAD E LEITURA — cada versão vira linhas no bronze
+# ------------------------------------------------------------------------------
+collect_data <- function() {
+  tryCatch({
+    lista <- list()
+
+    for (i in seq_len(nrow(versoes))) {
+      nome  <- versoes$classificacao[i]
+      label <- versoes$versao_label[i]
+      url   <- versoes$url[i]
+      ext   <- versoes$ext[i]
+
+      tmp <- tempfile(fileext = paste0(".", ext))
+
+      ok <- tryCatch({
+        download.file(url, tmp, mode = "wb", quiet = TRUE)
+        TRUE
+      }, error = function(e) {
+        cat(glue("[COLETA] Falha ao baixar {nome}: {conditionMessage(e)}\n"))
+        FALSE
+      })
+
+      if (!ok) next
+
+      raw <- tryCatch(
+        read_excel(tmp, sheet = 1, col_types = "text"),
+        error = function(e) {
+          cat(glue("[COLETA] Falha ao ler {nome}: {conditionMessage(e)}\n"))
+          NULL
+        }
+      )
+      unlink(tmp)
+      if (is.null(raw) || nrow(raw) == 0) next
+
+      # Normaliza para 6 colunas posicionais (preenche com NA se houver menos)
+      n <- ncol(raw)
+      df <- raw[, seq_len(min(n, 6)), drop = FALSE]
+      if (n < 6) for (j in seq(n + 1, 6)) df[[paste0("c", j)]] <- NA_character_
+      names(df) <- paste0("c", 1:6)
+
+      df$versao_label   <- label
+      df$classificacao  <- nome
+      df$data_coleta    <- format(Sys.time(), "%Y%m%d")
+
+      lista[[label]] <- df
+      cat(glue("[COLETA] {nome}: {nrow(df)} linhas\n"))
+    }
+
+    if (length(lista) == 0) stop("Nenhuma versão coletada com sucesso.")
+    bind_rows(lista)
+  }, error = function(e) {
+    cat("[COLETA] Erro:", conditionMessage(e), "\n")
+    quit(status = 1)
+  })
+}
+
+# ------------------------------------------------------------------------------
+# 3. SALVAR NO MINIO
+# ------------------------------------------------------------------------------
+save_to_minio_duckdb <- function(data) {
+  tryCatch({
+    timestamp <- format(Sys.time(), "%Y%m%d")
+    filepath  <- sprintf("bronze/base_cnae/raw_cnae_%s.parquet", timestamp)
+    write_parquet_to_minio(data, filepath)
+    filepath
+  }, error = function(e) {
+    cat("[COLETA] Erro ao salvar:", conditionMessage(e), "\n")
+    quit(status = 1)
+  })
+}
+
+dados   <- collect_data()
+arquivo <- save_to_minio_duckdb(dados)
+cat("[COLETA] Finalizado:", arquivo, "\n")
+cat(glue("[COLETA] {nrow(dados)} linhas | {n_distinct(dados$versao_label)} versões\n"))
