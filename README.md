@@ -1,4 +1,5 @@
-Pipeline de coleta e padronização de todas as versões disponíveis da Classificação Nacional de Atividades Econômicas (CNAE), publicadas pelo CONCLA/IBGE.
+## DAG Template
+Template base para pipelines de dados em camadas, com etapas separadas por responsabilidade.
 
 ## Estrutura do projeto
 
