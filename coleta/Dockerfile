@@ -1,9 +1,12 @@
-# 1. Usa a base que você acabou de buildar com sucesso
-FROM utils-r_duckdb:latest
+# Base do R (dags/utils/r_duckdb). O Makefile sobrescreve via --build-arg.
+ARG BASE_IMAGE=utils-r_duckdb:4.6.1-1
+FROM ${BASE_IMAGE}
 
 # 2. Instala os pacotes R necessários para a coleta
 # O rvest e httr2 fazem a raspagem; readxl lê os XLS; os demais tratam os dados
-RUN R -e "install.packages(c('rvest','httr2','readxl','dplyr','readr','glue','stringr'), repos='https://cloud.r-project.org/')"
+RUN R -q -e "pkgs <- c('rvest','httr2','readxl','dplyr','readr','glue','stringr'); \
+             install.packages(pkgs); \
+             stopifnot(all(pkgs %in% rownames(installed.packages())))"
 
 # 3. Define onde o trabalho acontece
 WORKDIR /app
