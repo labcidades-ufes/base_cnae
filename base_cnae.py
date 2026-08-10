@@ -17,7 +17,7 @@ docker_network = os.getenv("DOCKER_NETWORK")
 
 with DAG(
     dag_id="base_cnae",
-    schedule=None,
+    schedule='@daily',
     catchup=False,
     default_args=default_args,
     tags=["cnae", "ibge", "referencia"],
