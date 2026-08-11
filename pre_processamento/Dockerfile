@@ -13,7 +13,6 @@ WORKDIR /app
 
 # 4. Copia os arquivos necessários
 # Atenção: O build deve ser rodado da RAIZ do projeto
-COPY dags/utils/utils.R .
 COPY dags/base_cnae/pre_processamento/pre_processamento_cnae.R .
 
 # 5. Execução
