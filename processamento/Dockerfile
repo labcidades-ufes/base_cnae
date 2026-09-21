@@ -4,7 +4,7 @@ FROM ${BASE_IMAGE}
 
 # 2. Instala os pacotes R necessários para o processamento
 # O stringi e stringr limpam e normalizam os textos para o gold
-RUN R -q -e "pkgs <- c('dplyr','stringi','stringr','glue','tidyr'); \
+RUN R -q -e "pkgs <- c('dplyr','stringi','stringr','glue','tidyr','readr'); \
              install.packages(pkgs); \
              stopifnot(all(pkgs %in% rownames(installed.packages())))"
 

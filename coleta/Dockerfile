@@ -4,7 +4,7 @@ FROM ${BASE_IMAGE}
 
 # 2. Instala os pacotes R necessários para a coleta
 # O rvest e httr2 fazem a raspagem; readxl lê os XLS; os demais tratam os dados
-RUN R -q -e "pkgs <- c('rvest','httr2','readxl','dplyr','readr','glue','stringr'); \
+RUN R -q -e "pkgs <- c('readxl','readr','dplyr','glue'); \
              install.packages(pkgs); \
              stopifnot(all(pkgs %in% rownames(installed.packages())))"
 
