@@ -1,0 +1,453 @@
+identificador: base_cnae
+descricao: Base de referência CNAE obtida de ZIPs oficiais do IBGE. A cobertura atualmente validada compreende
+  CNAE 2.0 Classes, CNAE 2.0 Subclasses, CNAE 2.2 Subclasses e CNAE 2.3 Subclasses. O pipeline preserva
+  os ZIPs e um manifesto, normaliza as estruturas posicionais e produz uma gold com hierarquia e denominações
+  por classificação.
+curador:
+  nome: Julia Ricas Nunes Pereira
+  contato: julia.rn.pereira@edu.ufes.br
+  designado_em: '2026-10-06'
+estado: homologacao
+criticidade: relevante
+fonte:
+  origem: IBGE / CONCLA
+  endereco: https://ftp.ibge.gov.br/Informacoes_Gerais_e_Referencia/Classificacoes/CNAE/
+  forma_de_obtencao: Download automatizado de ZIPs públicos do IBGE; seleção explícita da estrutura detalhada
+    e leitura da primeira aba Excel.
+  condicoes_de_uso: 'Dados de referência disponibilizados publicamente pelo IBGE/CONCLA. A utilização
+    deve preservar a indicação da fonte e observar as condições de uso aplicáveis ao portal do IBGE.
+
+    '
+  verificacao_condicoes:
+    data_consulta: '2026-10-29'
+    referencia: https://ftp.ibge.gov.br/Informacoes_Gerais_e_Referencia/Classificacoes/CNAE/
+    disponibilidade: Arquivos identificados como públicos pelo IBGE.
+    licenca_especifica_redistribuicao: verificacao_pendente
+    atribuicao: Preservar a identificação do IBGE, produto e referência.
+    limite: Disponibilização pública não foi tratada como licença específica nem como aprovação interna
+      de tratamento ou publicação.
+periodicidade:
+  fonte: eventual
+  coleta: null
+  observacao_coleta: Execução manual em homologação; schedule=None na DAG.
+cobertura:
+  territorial: Brasil
+  temporal: Classificações CNAE 2.0 Classes e Subclasses, 2.2 Subclasses e 2.3 Subclasses. Não representa
+    cobertura de todas as versões históricas.
+  classificacoes_validadas:
+    CNAE 2.0 Classes: 673
+    CNAE 2.0 Subclasses: 1301
+    CNAE 2.2 Subclasses: 1329
+    CNAE 2.3 Subclasses: 1332
+classificacao:
+- tabela: bronze/base_cnae/raw_cnae_<AAAAMMDD>.parquet
+  nivel: publico
+  justificativa: 'Classificação econômica oficial publicada pelo IBGE/CONCLA, sem dados pessoais.
+
+    '
+- tabela: silver/base_cnae/silver_cnae_<AAAAMMDD>.parquet
+  nivel: publico
+  justificativa: 'Dados oficiais normalizados, sem informação pessoal ou restrita.
+
+    '
+- tabela: gold/base_cnae/gold_cnae_<AAAAMMDD>.parquet
+  nivel: publico
+  justificativa: 'Classificação econômica oficial estruturada para consumo por outras bases e análises.
+
+    '
+tabelas:
+- caminho: bronze/base_cnae/raw_cnae_<AAAAMMDD>.parquet
+  camada: bronze
+  granularidade: 'Registro correspondente às linhas das estruturas CNAE disponibilizadas pela CONCLA.
+
+    '
+  chave: []
+  volume_aproximado: 9179 registros na carga validada de 2026-10-27.
+- caminho: silver/base_cnae/silver_cnae_<AAAAMMDD>.parquet
+  camada: silver
+  granularidade: 'Registro da estrutura CNAE após limpeza e normalização.
+
+    '
+  chave: []
+  volume_aproximado: 8952 registros na carga validada de 2026-10-27.
+- caminho: gold/base_cnae/gold_cnae_<AAAAMMDD>.parquet
+  camada: gold
+  granularidade: Uma classe por classificação no recorte CNAE 2.0 Classes; uma subclasse por classificação
+    nos demais recortes validados.
+  chave: []
+  volume_aproximado: 4635 registros na carga validada de 2026-10-27.
+  chave_condicional:
+    CNAE 2.0 Classes:
+    - versao_cnae
+    - cod_classe
+    CNAE 2.0 Subclasses:
+    - versao_cnae
+    - cod_subclasse
+    CNAE 2.2 Subclasses:
+    - versao_cnae
+    - cod_subclasse
+    CNAE 2.3 Subclasses:
+    - versao_cnae
+    - cod_subclasse
+  observacao_chave: A chave depende do nível da classificação; cod_subclasse é nulo em CNAE 2.0 Classes.
+dicionario: docs/dicionario.md
+qualidade:
+- dimensao: completude
+  regra: 'A carga não pode estar vazia e deve conter versões CNAE válidas.
+
+    '
+  justificativa: 'Evita propagação de uma coleta vazia ou incompleta.
+
+    '
+- dimensao: conformidade
+  regra: 'Os códigos de subclasse devem seguir o formato esperado para as versões que possuem subclasses.
+
+    '
+  justificativa: 'Detecta alterações ou inconsistências nos arquivos da fonte.
+
+    '
+- dimensao: unicidade
+  regra: 'A combinação entre versão CNAE e código deve ser única na camada gold.
+
+    '
+  justificativa: 'Cada código possui significado único dentro de sua versão.
+
+    '
+- id: cnae_gold_completa_v1
+  dimensao: completude_conformidade_unicidade
+  status: implementada_e_testada
+  escopo: Resultado consolidado do processamento, antes da gravação gold.
+  regra: 'Exatamente quatro classificações: CNAE 2.0 Classes com 673 registros; CNAE 2.0 Subclasses com
+    1301; CNAE 2.2 Subclasses com 1329; CNAE 2.3 Subclasses com 1332. Esquema de oito colunas textuais;
+    campos obrigatórios preenchidos. cod_subclasse nulo somente no recorte de classes. Chave única por
+    classificação e código terminal.'
+  justificativa: Impede gravação de resultado parcial no escopo das quatro estruturas de referência conferidas.
+    Alterações da fonte exigem revisão dos limiares.
+  comportamento_falha: Estrutura inesperada ou validação reprovada encerra o processamento com status
+    1, antes da gravação gold.
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/0989e4cc1e372d3305d7e6a6bf59fc72c67315373fb1f8d64ff63694c206a817/conferencia-gold-completa-20261027T162243Z-329774/resultado.json
+dependencias:
+  consome: []
+  consumida_por: []
+  status_levantamento: levantamento pendente
+retencao:
+  bronze: 12 cargas ou 24 meses, o que for maior
+  silver: 6 cargas
+  gold: 'Preservar versões utilizadas em pesquisas, publicações ou entregas institucionais.
+
+    '
+  preservar: []
+consumidores:
+  interno: true
+  parceiros: []
+  publicado: false
+  status_levantamento: levantamento pendente
+limitacoes_conhecidas: A cobertura validada contém quatro classificações; CNAE 1.0, CNAE-Fiscal 1.1, CNAE
+  2.1, classificações domiciliares e demais versões não estão integradas à coleta atual. Classes e subclasses
+  não são intercambiáveis; sempre selecionar versao_cnae. nome_subclasse também descreve classes. A silver
+  é posicional e ainda contém linhas hierárquicas. A gold corrige especificamente o código de corte e
+  dobra de metais na versão 2.2 conforme as notas explicativas oficiais, mantendo a bronze original. As
+  novas cargas usam Parquets datados e entradas explícitas. Cargas anteriores conservam seus caminhos
+  datados. Proteção contra sobrescrita validada em homologação e alertas de falha configurados; consultar
+  protecao_gravacao e alertas_operacionais. A aprovação final permanece pendente.
+historico:
+- data: 2026-10-06
+  tipo: curadoria_inicial
+  descricao: 'Ficha criada durante a adequação da base à política de Governança de Dados do Data Lake.
+
+    '
+- data: '2026-10-13'
+  tipo: ajuste_e_validacao_em_homologacao
+  descricao: Coleta de teste das versões 2.2 e 2.3 realizada por ZIPs oficiais do IBGE após resposta HTTP
+    403 no portal CONCLA. Na transformação para gold, corrigido o código de corte e dobra de metais da
+    versão 2.2 de 2599-3/01 para 2599-3/02, conforme as notas explicativas oficiais, preservando a bronze.
+    Marcadores de continuação impedidos de preencher códigos hierárquicos. Gold validada com 2.661 registros
+    e sem duplicidade de versão e subclasse. Cobertura histórica completa e homologação pelo Airflow pendentes.
+- data: '2026-10-13'
+  tipo: validacao_airflow
+  run_id: manual__2026-10-13T21:55:54+00:00
+  bucket_homologacao: homologacao-airflow-20261013215410-c539da0e
+  resultado: testes_basicos_aprovados
+  evidencia: include/evidencias_curadoria/homologacao-airflow-20261013215410-c539da0e/conferencia.log
+  descricao: 'Execução manual pelo Airflow concluída com sucesso, com testes básicos posteriores aprovados.
+    Escopo limitado à CNAE 2.2 e 2.3 Subclasses. Bronze: 5.347 linhas; silver: 5.206; gold: 2.661. Versão
+    2.2: 1.329 subclasses; versão 2.3: 1.332. Chave versão/subclasse sem duplicatas. Cobertura histórica
+    completa e produção pendentes.'
+- data: '2026-10-13'
+  tipo: pendencia_alerta
+  descricao: Configuração e teste do alerta automático de falha permanecem pendentes. A autenticação para
+    envio pela conta institucional ainda não foi configurada. Demais atividades de curadoria seguem em
+    homologação. Esta pendência não representa dispensa do requisito para admissão em produção.
+- data: '2026-10-14'
+  tipo: ampliacao_cobertura_cnae_validada
+  run_id: manual__2026-10-13T22:55:57.985768+00:00
+  bucket_homologacao: homologacao-airflow-cnae-20261013225408-1e3ef87f
+  data_coleta: '2026-10-13'
+  data_processamento: '2026-10-14'
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/conferencia_historico.log
+  descricao: 'Cobertura ampliada e conferida com quatro classificações. Bronze: 9.179 linhas; silver:
+    8.952; gold: 4.635. Quantidades, chaves condicionais, formatos, preenchimento e coerência hierárquica
+    aprovados na conferência posterior. Data de coleta preservada na bronze e silver. Estado de homologação
+    mantido.'
+- data: '2026-10-14'
+  tipo: validacao_referencia_explicita_cnae
+  run_id: manual__cnae_referencia-20261014T155310Z-1184
+  carga_id: b16b5cff11ea1770be3eba89201a7a17b39dc494cf53bab155a8dc5d20dbe367
+  bucket_homologacao: homologacao-airflow-cnae-20261013225408-1e3ef87f
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/b16b5cff11ea1770be3eba89201a7a17b39dc494cf53bab155a8dc5d20dbe367/conferencia_referencia.log
+  descricao: 'Execução Airflow concluída com sucesso. Arquivos lidos por referência explícita de carga.
+    Bronze: 9.179; silver: 8.952; gold: 4.635 registros. Quatro classificações, chaves, formatos, hierarquia
+    e vínculo do manifesto com a bronze conferidos. Estado de homologação mantido.'
+- data: '2026-10-26'
+  tipo: validacao_gravacao_condicional
+  run_id: manual__protecao_20261026T213713Z_cnae_v2
+  carga_id: c0d361c7e092fc4f5577650e416088ca6410cc008333c47fa1121a2dfe21fa8d
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/c0d361c7e092fc4f5577650e416088ca6410cc008333c47fa1121a2dfe21fa8d/conferencia_protegida.log
+  descricao: Funções das seis imagens testadas com primeira gravação, leitura e rejeição HTTP 412 da sobrescrita,
+    preservando os originais. Nova carga Airflow concluída com sucesso e arquivos conferidos. Estado homologacao
+    mantido.
+- data: '2026-10-26'
+  tipo: configuracao_alertas_smtp
+  descricao: Teste controlado de falha executado e recebimento do alerta confirmado pelo usuário. Mesmo
+    notificador configurado nas tarefas da base. Homologação mantida.
+- data: '2026-10-27'
+  tipo: reconciliacao_documental_dominios_20261027
+  descricao: Corrigidas limitações atuais que ainda apresentavam proteção e alertas como pendentes. Histórico
+    e homologação preservados.
+- data: '2026-10-27'
+  tipo: validacao_gold_completa_cnae
+  run_id: manual__gold_completa_20261027T161819Z_cnae
+  carga_id: 0989e4cc1e372d3305d7e6a6bf59fc72c67315373fb1f8d64ff63694c206a817
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/0989e4cc1e372d3305d7e6a6bf59fc72c67315373fb1f8d64ff63694c206a817/conferencia-gold-completa-20261027T162243Z-329774/resultado.json
+  descricao: Removido o comportamento de pular classificação com estrutura inesperada. Validação consolidada
+    adicionada antes da gravação gold. Testes de aceitação e rejeição aprovados; nova execução Airflow
+    e conferência dos Parquets aprovadas. Homologação mantida.
+- data: '2026-10-27'
+  tipo: migracao_contas_minio_por_dominio
+  run_id: manual__contas_dominio_20261027T163427Z_cnae
+  descricao: DAG migrada da conexão administrativa compartilhada para conta técnica própria. Testes de
+    permissões, acesso R e execução completa Airflow aprovados. Rotação administrativa da plataforma pendente;
+    estado homologacao mantido.
+- data: '2026-10-29'
+  tipo: consolidacao_fechamento_revisao_tecnica
+  descricao: Resultados técnicos consolidados em relatório com evidências e pendências explícitas. Automatização
+    adicional não tratada como requisito isolado de encerramento. Homologação mantida; nenhuma aprovação
+    institucional presumida.
+- data: '2026-10-29'
+  tipo: registro_responsaveis_fechamento
+  descricao: Registrados Gestor informado e adoção da política pela usuária. Na CNEFE, registrada indicação
+    de Julia para avaliação de dados pessoais, sem presumir designação formal ou parecer favorável. Homologação
+    mantida.
+- data: '2026-10-29'
+  tipo: teste_recuperacao_cargas_referencia
+  evidencia: include/evidencias_curadoria/20261029T190536Z-6825768ba06f-recuperacao/resultado.json
+  descricao: Cópia local e restauração dos objetos da carga de referência conferidas por SHA-256 e tamanho.
+    Originais preservados. Limites do teste e pendências da plataforma registrados.
+- data: '2026-10-29'
+  tipo: validacao_padrao_datado_g63
+  run_id: manual__padrao_datado_20261029T191754Z_cnae
+  evidencia: include/evidencias_curadoria/conferencia-datados-20261029T192806Z-488353/resultado.json
+  descricao: Caminhos Parquet adequados ao padrão datado da política. Data compartilhada entre etapas,
+    imagens reconstruídas, execução Airflow e conferência posterior aprovadas. Objetos históricos preservados.
+- data: '2026-10-29'
+  tipo: verificacao_disponibilidade_publica_fonte
+  descricao: Disponibilização pública confirmada no diretório oficial do IBGE. Licença específica de redistribuição
+    não confirmada. Consumidores e dependências permanecem com levantamento pendente.
+- data: '2026-10-29'
+  tipo: registro_operadores_e_nivel_servico
+  descricao: Registradas Julia e André Alves como pessoas capazes de operar o pipeline, conforme informação
+    da usuária. Declarado o nível de serviço previsto na política para criticidade relevante.
+- data: '2026-10-29'
+  tipo: reconstrucao_imagens_documentada
+  descricao: Reconstrução da imagem base e das seis imagens documentada. Scripts e dependências conferidos;
+    DuckDB local aprovado. Imagens das DAGs preservadas.
+rastreabilidade:
+  identificador: carga_id
+  geracao: SHA-256 do run_id do Airflow, codificado em UTF-8.
+  vinculo: As etapas compartilham carga_id e data de referência do início do DagRun. Silver lê a bronze
+    datada explicitamente; gold lê a silver da mesma data. Fontes e manifestos permanecem identificados
+    por carga_id.
+  manifesto: bronze/base_cnae/cargas/<carga_id>/fontes/manifesto.csv
+  originais: bronze/base_cnae/cargas/<carga_id>/fontes/
+  data_coleta: Permanece como atributo da bronze, silver e manifesto; o caminho dos objetos identifica
+    a execução.
+  limite: Execuções na mesma data utilizam os mesmos destinos Parquet. Destino existente é rejeitado pela
+    gravação condicional. Novo run_id não elimina essa colisão.
+protecao_gravacao:
+  estado: validada_em_homologacao
+  mecanismo: 'If-None-Match: *'
+  regra: 'Envio com If-None-Match: *. Destino existente é rejeitado com HTTP 412. Preservar cargas parciais
+    para análise. Uma nova execução completa depende de destinos datados livres; mudar somente o run_id
+    não permite sobrescrever os arquivos existentes.'
+  limite_arquivo: 4 GiB por arquivo nesta implementação; sem multipart.
+  armazenamento_temporario: Parquet gerado localmente antes do upload; requer espaço temporário suficiente
+    no container.
+  run_id_validado: manual__protecao_20261026T213713Z_cnae_v2
+  carga_id_validada: c0d361c7e092fc4f5577650e416088ca6410cc008333c47fa1121a2dfe21fa8d
+  bucket_homologacao: homologacao-airflow-cnae-20261013225408-1e3ef87f
+  volumes_conferidos:
+    bronze: 9179
+    silver: 8952
+    gold: 4635
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/c0d361c7e092fc4f5577650e416088ca6410cc008333c47fa1121a2dfe21fa8d/conferencia_protegida.log
+  imagens:
+    coleta_cnae: base_cnae-coleta:protecao-20261026T213713Z
+    pre_processamento_cnae: base_cnae-pre_processamento:protecao-20261026T213713Z
+    processamento_cnae: base_cnae-processamento:protecao-20261026T213713Z
+  ids_imagens_testadas:
+    coleta_cnae: sha256:4872184cc5063ca912a56199e67b5810a33093108c0f0d0034bf2d9d6f598525
+    pre_processamento_cnae: sha256:045f613c4c18e86f3cdfe5a32a2c28aad20f35cd523c0be74859624cb4f0df5c
+    processamento_cnae: sha256:71e7469f61447a8f4207ccbe55d4bb72793f249fa41789e8dcf474df1786a857
+alertas_operacionais:
+  estado: configurados
+  canal: email
+  conexao_airflow: smtp_curadoria
+  remetente: julia.rn.pereira@edu.ufes.br
+  destinatarios:
+  - julia.rn.pereira@edu.ufes.br
+  evento: falha de tarefa
+  implementacao: SmtpNotifier em on_failure_callback
+  teste:
+    dag_id: teste_alerta_curadoria
+    run_id: manual__teste_smtp_curadoria_01
+    falha_intencional: true
+    recebimento_confirmado_pelo_usuario: true
+  limite: Depende do funcionamento do Airflow, do callback e do SMTP. Não detecta sozinho a indisponibilidade
+    total da plataforma.
+validacao_gold_completa:
+  run_id: manual__gold_completa_20261027T161819Z_cnae
+  carga_id: 0989e4cc1e372d3305d7e6a6bf59fc72c67315373fb1f8d64ff63694c206a817
+  bucket_homologacao: homologacao-airflow-cnae-20261013225408-1e3ef87f
+  volumes_conferidos:
+    bronze: 9179
+    silver: 8952
+    gold: 4635
+  imagem: base_cnae-processamento:gold-completa-20261027T161819Z-836915
+  imagem_id: sha256:6df228a8fbad7c72377a9275e0b35b2f7785ffd900790eb975c78e9c89e04ecc
+  evidencia: include/evidencias_curadoria/homologacao-airflow-cnae-20261013225408-1e3ef87f/0989e4cc1e372d3305d7e6a6bf59fc72c67315373fb1f8d64ff63694c206a817/conferencia-gold-completa-20261027T162243Z-329774/resultado.json
+  testes_negativos: Classificação ausente e estrutura inválida rejeitadas pela transformação; validador
+    também testado com campos ausentes, volumes e chaves inválidos.
+  conferencia_posterior: Data de coleta preservada, formatos e vínculos entre divisão, grupo, classe e
+    subclasse conferidos no Parquet gravado.
+acesso_operacional:
+  estado: conta_por_dominio_testada_em_homologacao
+  conexao_airflow: minio_curadoria_cnae
+  bucket_autorizado: homologacao-airflow-cnae-20261013225408-1e3ef87f
+  prefixos_autorizados:
+  - bronze/base_cnae/
+  - silver/base_cnae/
+  - gold/base_cnae/
+  permissoes:
+  - Consultar localização do bucket.
+  - Listar os prefixos autorizados.
+  - Ler e gravar objetos nos prefixos autorizados.
+  restricoes_testadas:
+  - Exclusão de objetos negada.
+  - Listagem da raiz do bucket negada.
+  - Listagem de outro domínio no mesmo bucket negada.
+  - Leitura de objeto no bucket da outra base negada.
+  - Gravação fora dos prefixos autorizados negada.
+  evidencia_permissoes: include/evidencias_curadoria/permissoes-dominio-20261027T163224Z-1835b93504f84e4996a080777cbf5ab8/resultado.json
+  evidencia_acesso_r: include/evidencias_curadoria/acesso-r-dominio-20261027T163529Z-17aeacc61fc1400a963798483b88af82/resultado.json
+  run_id_validado: manual__contas_dominio_20261027T163427Z_cnae
+  registro_execucao: include/curadoria_cnae_carga_contas_dominio_20261027T163427Z.json
+  limites:
+  - A conta do domínio tem acesso às três camadas; não há separação por etapa.
+  - A rejeição de sobrescrita depende do envio condicional pelos scripts.
+  - Não constitui autorização para acesso externo ou publicação.
+  pendencia_plataforma: Credencial administrativa padrão ainda ativa. Sua substituição exige tratar dependências
+    de outros pipelines, variáveis de ambiente e a conexão antiga minio_curadoria. Migração destas duas
+    bases não encerra essa pendência.
+fechamento_revisao_tecnica:
+  data: '2026-10-29'
+  status: revisao_tecnica_consolidada_com_pendencias
+  admissao_producao: nao_aprovada_neste_registro
+  relatorio: docs/fechamento_curadoria.md
+  run_id_referencia: manual__contas_dominio_20261027T163427Z_cnae
+  registro_execucao: include/curadoria_cnae_carga_contas_dominio_20261027T163427Z.json
+  pendencias:
+  - Substituir a credencial administrativa padrão do MinIO, tratando as dependências dos demais pipelines.
+  - Conferir a completude da procedência das cargas escolhidas para admissão. Os registros retrospectivos
+    existentes cobrem as cargas de 27/10/2026; não devem ser atribuídos automaticamente às cargas posteriores.
+  - Confirmar condições de uso da fonte, consumidores e classificação conforme a finalidade efetiva.
+  - Teste de recuperação das cargas de referência aprovado. Definir backup periódico em destino independente
+    e comprovar recuperação dos demais componentes da plataforma.
+  - Aplicar o checklist institucional de admissão e registrar a aprovação do Gestor.
+  automatizacao_adicional_procedencia: Melhoria futura. Até sua implantação, cada nova carga deve ter
+    procedência registrada e conferida por procedimento documentado.
+  pendencias_resolvidas:
+  - item: Padrão dos caminhos Parquet — G-6.3
+    resultado: Implementação adequada à política; nova carga conferida.
+    evidencia: include/evidencias_curadoria/conferencia-datados-20261029T192806Z-488353/resultado.json
+governanca_responsaveis:
+  politica:
+    documento: Governanca-de-Dados
+    adocao: confirmada_pela_usuaria
+    observacao: Usuária informou que o LabCidades adotou o documento como regra. Cabeçalho de proposta
+      e referência ao ato de adoção a reconciliar na documentação institucional.
+  curadora:
+    nome: Julia Ricas Nunes Pereira
+    contato: julia.rn.pereira@edu.ufes.br
+  gestor:
+    nome_informado: Pedro
+    identificacao_completa: a_complementar
+    aprovacao_producao: pendente
+recuperacao_carga_referencia:
+  estado: teste_de_objetos_aprovado
+  teste_id: 20261029T190536Z-6825768ba06f
+  quantidade_objetos_base: 11
+  camadas:
+  - bronze
+  - silver
+  - gold
+  backup_host: /home/julia/backups-curadoria/recuperacao-20261029T190536Z-6825768ba06f
+  evidencia: include/evidencias_curadoria/20261029T190536Z-6825768ba06f-recuperacao/resultado.json
+  verificacoes:
+  - Restauração em chaves de teste sem substituir os originais.
+  - SHA-256 e tamanho dos objetos restaurados conferidos.
+  - SHA-256 e tamanho das cópias no host conferidos.
+  limites:
+  - Teste restrito aos objetos das cargas selecionadas.
+  - Não recupera banco Airflow, usuários, políticas ou toda a plataforma.
+  - Cópia no mesmo computador; proteção contra perda da máquina não demonstrada.
+  - Periodicidade, destino independente e retenção do backup a definir.
+padrao_caminhos:
+  regra: G-6.3
+  estado: implementado_e_validado_em_homologacao
+  parquets:
+    bronze: bronze/base_cnae/raw_cnae_<AAAAMMDD>.parquet
+    silver: silver/base_cnae/silver_cnae_<AAAAMMDD>.parquet
+    gold: gold/base_cnae/gold_cnae_<AAAAMMDD>.parquet
+  data_referencia: Data UTC de início do DagRun, compartilhada pelas três etapas.
+  leitura: Referência explícita; sem seleção por ordenação de nomes.
+  identificador_execucao: run_id e carga_id mantidos nos registros e nos arquivos auxiliares.
+  run_id_validado: manual__padrao_datado_20261029T191754Z_cnae
+  carga_id_validada: 5b04498795f5cf3168135f6b2a6f9883b0216462cee0ef95ba56e4ca427e92b0
+  caminhos_validados:
+    bronze: bronze/base_cnae/raw_cnae_20261029.parquet
+    silver: silver/base_cnae/silver_cnae_20261029.parquet
+    gold: gold/base_cnae/gold_cnae_20261029.parquet
+  evidencia: include/evidencias_curadoria/conferencia-datados-20261029T192806Z-488353/resultado.json
+operacao:
+  pessoas_capazes_de_operar:
+  - nome: Julia Ricas Nunes Pereira
+    papel: Curadora e operadora durante a homologação
+  - nome: André Alves
+    papel: Autor dos pipelines e operador
+    capacidade_informada: Construção de imagens, DAGs e consulta de logs
+    confirmacao: Informada pela usuária
+  nivel_servico:
+    referencia: Governança de Dados, seção 13.1
+    criticidade: relevante
+    alerta: Imediato ao Curador
+    primeira_resposta: Até 3 dias úteis
+    normalizacao: Até 15 dias úteis
+    aplicacao: Compromisso operacional previsto para produção
+reconstrucao_pipeline:
+  estado: build_e_dependencias_conferidos
+  documentacao: docs/reconstrucao.md
+  comando_na_raiz_do_datalake: make build-dags CURADORIA=1
+  registro_construcao: include/curadoria_reconstrucao_20261029T223311Z-769901.json
+  evidencia: include/evidencias_curadoria/reconstrucao-20261029T231945Z-090221/resultado.json
+  limite: Build, scripts embarcados, dependências e DuckDB local conferidos. Não representa execução completa
+    das novas imagens.
