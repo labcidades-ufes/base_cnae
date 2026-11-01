@@ -1,1 +1,7 @@
-__pycache__
+
+# Arquivos locais excluídos do versionamento
+__pycache__/
+*.py[cod]
+/.segredos/
+/.env
+/.env.*
